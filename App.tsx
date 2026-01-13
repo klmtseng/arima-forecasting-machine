@@ -1,7 +1,11 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart } from 'recharts';
-import { Activity, Upload, Settings, TrendingUp, BarChart2, Info, RefreshCw, AlertCircle, Trash2, BookOpen, Target } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart 
+} from 'recharts';
+import { 
+  Activity, Upload, Settings, TrendingUp, BarChart2, Info, RefreshCw, AlertCircle, Trash2, BookOpen, Target, ChevronRight, CheckCircle2, AlertTriangle, XCircle 
+} from 'lucide-react';
 import { DataPoint, ModelParams, AnalysisResult, ChartData } from './types';
 import { runArimaAnalysis } from './services/arimaService';
 import { ParameterSidebar } from './components/ParameterSidebar';
@@ -111,7 +115,7 @@ const App: React.FC = () => {
     }
   };
 
-  const chartData: ChartData[] = React.useMemo(() => {
+  const chartData: ChartData[] = useMemo(() => {
     if (!data.length) return [];
     
     // Determine split index for visualization
@@ -156,50 +160,56 @@ const App: React.FC = () => {
     return combined;
   }, [data, result, mode, splitRatio]);
 
+  // Helper to determine stability rating based on MAPE
+  const getStabilityRating = (mape: number) => {
+    if (mape < 10) return { label: 'High Stability', color: 'text-emerald-400', icon: CheckCircle2 };
+    if (mape < 25) return { label: 'Moderate', color: 'text-yellow-400', icon: AlertTriangle };
+    return { label: 'Low Stability', color: 'text-red-400', icon: XCircle };
+  };
+
   return (
-    <div className="flex flex-col h-screen bg-slate-50 overflow-hidden text-slate-900">
+    <div className="flex flex-col h-screen bg-slate-100 overflow-hidden text-slate-900 font-sans">
       <ModelGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
 
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm z-10">
+      {/* Professional Header */}
+      <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-sm z-20 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-600 rounded-lg">
-            <Activity className="w-6 h-6 text-white" />
+          <div className="w-8 h-8 bg-slate-900 text-white rounded flex items-center justify-center">
+            <Activity className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">ARIMA Forecasting Machine</h1>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Predictive Analytics Platform</p>
+            <h1 className="text-lg font-bold text-slate-900 leading-tight">QuantForecast<span className="text-slate-400 font-light">.ai</span></h1>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsGuideOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded border border-transparent hover:border-slate-200 transition-all"
           >
             <BookOpen className="w-4 h-4" />
-            Model Guide
+            Model Reference
           </button>
-          <div className="h-6 w-px bg-slate-200 mx-1"></div>
+          <div className="h-5 w-px bg-slate-300 mx-1"></div>
           {data.length > 0 && (
             <button 
               onClick={handleClear}
-              className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-              title="Clear current dataset"
+              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+              title="Clear Data"
             >
-              <Trash2 className="w-5 h-5" />
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
           <button 
             onClick={handleAnalyze}
             disabled={loading || data.length === 0}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-bold text-sm transition-all duration-200 ${
+            className={`flex items-center gap-2 px-5 py-2 rounded font-bold text-xs uppercase tracking-wide transition-all duration-200 ${
               loading || data.length === 0 
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 active:scale-95'
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                : 'bg-slate-900 text-white hover:bg-slate-800 shadow-md active:translate-y-0.5'
             }`}
           >
-            {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
-            {loading ? (mode === 'backtest' ? 'Validating...' : 'Processing...') : (mode === 'backtest' ? 'Run Validation' : 'Run Forecast')}
+            {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <TrendingUp className="w-3.5 h-3.5" />}
+            {loading ? 'Processing...' : (mode === 'backtest' ? 'Run Validation' : 'Compute Forecast')}
           </button>
         </div>
       </header>
@@ -218,149 +228,178 @@ const App: React.FC = () => {
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50">
-          <div className="max-w-6xl mx-auto space-y-8">
+        <main className="flex-1 overflow-y-auto p-6 bg-slate-100">
+          <div className="max-w-7xl mx-auto space-y-6">
             
             {!data.length && (
-              <div className="bg-white border border-slate-200 rounded-[2.5rem] p-12 text-center shadow-xl shadow-slate-200/50 mt-10">
-                <div className="mx-auto w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mb-8 rotate-3 hover:rotate-0 transition-transform">
-                  <Upload className="w-10 h-10 text-indigo-600" />
+              <div className="bg-white border border-slate-200 rounded-lg p-10 text-center shadow-sm mt-8 max-w-4xl mx-auto">
+                <div className="mx-auto w-16 h-16 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mb-6">
+                  <Upload className="w-8 h-8 text-slate-400" />
                 </div>
-                <h2 className="text-3xl font-black text-slate-800 mb-3">Welcome to the Forecasting Machine</h2>
-                <p className="text-slate-500 mb-10 max-w-lg mx-auto leading-relaxed">
-                  This machine specializes in <strong>Univariate ARIMA</strong> modeling. 
-                  However, our analysis engine also evaluates your data through <strong>Bayesian</strong> and <strong>Multivariate</strong> perspectives to provide holistic insights.
-                  <br/><br/>
-                  Start by uploading your time-series data or try one of our pre-built datasets.
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">Initialize Forecasting Engine</h2>
+                <p className="text-slate-500 mb-8 max-w-md mx-auto">
+                  Import time-series data to begin analysis. The engine supports CSV formats with automated date inference.
                 </p>
+                
+                {/* Workflow Guide */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left max-w-3xl mx-auto mb-10">
+                  <div className="p-4 bg-slate-50 rounded border border-slate-100">
+                    <span className="text-xs font-bold text-slate-400 uppercase">Step 01</span>
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mt-1">Import Data <ChevronRight className="w-4 h-4 text-slate-300"/></h3>
+                    <p className="text-xs text-slate-500 mt-2">Upload a CSV file or load a financial sample below. Ensure data is clean.</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded border border-slate-100">
+                    <span className="text-xs font-bold text-slate-400 uppercase">Step 02</span>
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mt-1">Configure Model <ChevronRight className="w-4 h-4 text-slate-300"/></h3>
+                    <p className="text-xs text-slate-500 mt-2">Use the sidebar to tune ARIMA parameters (p,d,q) or switch to Backtest mode.</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded border border-slate-100">
+                    <span className="text-xs font-bold text-slate-400 uppercase">Step 03</span>
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mt-1">Analyze & Verify</h3>
+                    <p className="text-xs text-slate-500 mt-2">Run the computation. Check AIC/BIC scores and visual fit to validate accuracy.</p>
+                  </div>
+                </div>
+
                 <DataUploader onUpload={handleDataUpload} />
               </div>
             )}
 
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 text-red-700 animate-in fade-in slide-in-from-top-4 duration-300 shadow-sm">
-                <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 flex items-center gap-3 text-red-700 shadow-sm rounded-r">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
                 <div>
-                  <p className="font-bold">Analysis Error</p>
+                  <p className="font-bold text-sm">System Error</p>
                   <p className="text-sm opacity-90">{error}</p>
                 </div>
               </div>
             )}
 
             {data.length > 0 && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {/* Stats Summary Cards */}
                 <StatsSummary result={result} dataCount={data.length} />
 
-                {/* Backtest Metrics Panel (Only visible if metrics exist) */}
+                {/* Backtest Metrics Panel */}
                 {result?.metrics && mode === 'backtest' && (
-                  <div className="bg-indigo-900 text-white p-6 rounded-[2rem] shadow-lg shadow-indigo-900/20 animate-in slide-in-from-top-4">
-                    <div className="flex items-center gap-2 mb-4 opacity-80 uppercase tracking-widest text-xs font-bold">
-                      <Target className="w-4 h-4" /> Validation Accuracy
+                  <div className="bg-slate-800 text-white p-6 rounded-lg shadow-md flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-slate-700 rounded-lg">
+                        <Target className="w-6 h-6 text-emerald-400" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-base text-slate-100 uppercase tracking-wider">Backtest Validation</h3>
+                        <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                          Model performance on the hidden test set. Lower percentages indicate higher predictive stability.
+                        </p>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-8">
-                      <div>
-                        <div className="text-3xl font-black">{result.metrics.mape.toFixed(2)}%</div>
-                        <div className="text-xs text-indigo-300 font-medium mt-1">MAPE (Mean Absolute % Error)</div>
+                    
+                    <div className="flex gap-8 items-center border-l border-slate-700 pl-8">
+                       <div className="text-right">
+                        <div className="flex items-center justify-end gap-2 mb-1">
+                          {(() => {
+                            const stability = getStabilityRating(result.metrics.mape);
+                            const Icon = stability.icon;
+                            return (
+                              <>
+                                <span className={`text-[10px] font-bold uppercase tracking-widest ${stability.color}`}>{stability.label}</span>
+                                <Icon className={`w-3 h-3 ${stability.color}`} />
+                              </>
+                            );
+                          })()}
+                        </div>
+                        <div className="text-3xl font-mono font-bold text-white">{result.metrics.mape.toFixed(2)}%</div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">Mean Abs % Error (MAPE)</div>
                       </div>
-                      <div>
-                        <div className="text-3xl font-black">{result.metrics.rmse.toFixed(2)}</div>
-                        <div className="text-xs text-indigo-300 font-medium mt-1">RMSE (Root Mean Sq Error)</div>
-                      </div>
-                      <div>
-                        <div className="text-3xl font-black">{result.metrics.mae.toFixed(2)}</div>
-                        <div className="text-xs text-indigo-300 font-medium mt-1">MAE (Mean Absolute Error)</div>
+
+                      <div className="text-right hidden sm:block">
+                        <div className="text-3xl font-mono font-bold text-slate-300">{result.metrics.rmse.toFixed(2)}</div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">RMSE</div>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {/* Main Visualization */}
-                <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 p-8 relative overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 relative overflow-hidden">
                   {loading && (
-                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center gap-4">
+                    <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center gap-4">
                       <div className="relative">
-                        <RefreshCw className="w-12 h-12 text-indigo-600 animate-spin" />
-                        <Activity className="w-6 h-6 text-indigo-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                        <RefreshCw className="w-10 h-10 text-slate-800 animate-spin" />
                       </div>
-                      <p className="font-bold text-slate-800 animate-pulse">Running ARIMA & Bayesian Simulations...</p>
+                      <p className="font-mono text-xs font-bold text-slate-600 uppercase tracking-widest">Running Computational Models...</p>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
                     <div>
-                      <h3 className="text-xl font-black text-slate-800">
-                        {mode === 'backtest' ? 'Validation Analysis' : 'Forecast Visualization'}
+                      <h3 className="text-lg font-bold text-slate-800">
+                        {mode === 'backtest' ? 'Validation Matrix' : 'Forecast Trajectory'}
                       </h3>
-                      <p className="text-sm text-slate-500">
-                        {mode === 'backtest' ? 'Comparing predicted values against unseen historical data' : 'Time-series decomposition & projected values'}
+                      <p className="text-xs text-slate-500 font-mono mt-1">
+                        MODEL: SARIMA({params.p},{params.d},{params.q})({params.P},{params.D},{params.Q})_{params.s}
                       </p>
                     </div>
-                    <div className="flex gap-3">
-                      <span className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-slate-100 px-4 py-2 rounded-xl">
-                        <div className="w-2.5 h-2.5 rounded-full bg-indigo-600 shadow-sm shadow-indigo-300"></div> 
-                        {mode === 'backtest' ? 'Training Data' : 'Historical'}
+                    <div className="flex gap-2">
+                      <span className="flex items-center gap-2 text-[10px] font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded border border-slate-200">
+                        <div className="w-2 h-2 rounded-full bg-slate-900"></div> 
+                        {mode === 'backtest' ? 'TRAINING' : 'HISTORY'}
                       </span>
                       {mode === 'backtest' && (
-                        <span className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-slate-100 px-4 py-2 rounded-xl">
-                          <div className="w-2.5 h-2.5 rounded-full bg-slate-400 border border-slate-300"></div> Test Data (Actual)
+                        <span className="flex items-center gap-2 text-[10px] font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded border border-slate-200">
+                          <div className="w-2 h-2 rounded-full bg-slate-400"></div> VALIDATION
                         </span>
                       )}
-                      <span className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-slate-100 px-4 py-2 rounded-xl">
-                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-300"></div> Model Forecast
+                      <span className="flex items-center gap-2 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded border border-emerald-100">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div> PROJECTION
                       </span>
                     </div>
                   </div>
 
-                  <div className="h-[450px] w-full">
+                  <div className="h-[400px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <defs>
-                          <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
-                            <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                          </linearGradient>
                           <linearGradient id="colorForecast" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
                             <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                         <XAxis 
                           dataKey="timestamp" 
-                          stroke="#94a3b8" 
-                          fontSize={11} 
-                          fontWeight={600}
+                          stroke="#64748b" 
+                          fontSize={10} 
                           tickLine={false} 
                           axisLine={false} 
-                          dy={15}
+                          dy={10}
+                          minTickGap={30}
                         />
                         <YAxis 
-                          stroke="#94a3b8" 
-                          fontSize={11} 
-                          fontWeight={600}
+                          stroke="#64748b" 
+                          fontSize={10} 
                           tickLine={false} 
                           axisLine={false} 
                           tickFormatter={(val) => val.toLocaleString()}
-                          dx={-5}
+                          dx={-10}
                         />
                         <Tooltip 
                           contentStyle={{ 
-                            borderRadius: '16px', 
-                            border: 'none', 
-                            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
-                            padding: '12px'
+                            borderRadius: '4px', 
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                            fontSize: '12px',
+                            fontFamily: 'monospace'
                           }}
                         />
-                        <Legend verticalAlign="top" align="left" height={40} iconType="circle" wrapperStyle={{ paddingBottom: '20px', fontSize: '12px', fontWeight: 600 }} />
+                        <Legend verticalAlign="top" align="right" height={36} iconType="rect" wrapperStyle={{ fontSize: '10px', fontWeight: 600, opacity: 0 }} />
                         
                         <Area 
                           type="monotone" 
                           dataKey="upper" 
                           stroke="none" 
                           fill="#10b981" 
-                          fillOpacity={0.08} 
-                          name="CI Upper"
+                          fillOpacity={0.1} 
                           legendType="none"
                         />
                         <Area 
@@ -372,47 +411,38 @@ const App: React.FC = () => {
                           legendType="none"
                         />
 
-                        {/* Standard Mode Line */}
                         <Line 
                           type="monotone" 
                           dataKey="actual" 
-                          stroke="#4f46e5" 
-                          strokeWidth={4} 
-                          dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} 
-                          activeDot={{ r: 7, strokeWidth: 0 }} 
-                          name="Historical Data"
+                          stroke="#0f172a" 
+                          strokeWidth={2} 
+                          dot={false}
+                          activeDot={{ r: 4 }} 
                         />
 
-                        {/* Backtest Mode: Training Data */}
                         <Line 
                           type="monotone" 
                           dataKey="trainValue" 
-                          stroke="#4f46e5" 
-                          strokeWidth={4} 
-                          dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} 
-                          name="Training Data"
+                          stroke="#0f172a" 
+                          strokeWidth={2} 
+                          dot={false}
                         />
 
-                        {/* Backtest Mode: Test Data (Ground Truth) */}
                         <Line 
                           type="monotone" 
                           dataKey="testValue" 
                           stroke="#94a3b8" 
-                          strokeWidth={3} 
-                          strokeDasharray="4 4"
-                          dot={{ r: 3, fill: '#94a3b8', strokeWidth: 2, stroke: '#fff' }} 
-                          name="Validation Data"
+                          strokeWidth={2} 
+                          strokeDasharray="3 3"
+                          dot={false} 
                         />
 
-                        {/* Forecast Line */}
                         <Line 
                           type="monotone" 
                           dataKey="forecast" 
                           stroke="#10b981" 
-                          strokeWidth={4} 
-                          strokeDasharray="8 6"
-                          dot={{ r: 5, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} 
-                          name="ARIMA Prediction"
+                          strokeWidth={2} 
+                          dot={{ r: 3, fill: '#10b981', strokeWidth: 1, stroke: '#fff' }} 
                         />
                       </ComposedChart>
                     </ResponsiveContainer>
@@ -421,39 +451,37 @@ const App: React.FC = () => {
 
                 {/* Analysis Insights */}
                 {result && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center gap-2 mb-6 text-indigo-600 font-bold uppercase text-xs tracking-widest">
-                        <BarChart2 className="w-4 h-4" />
-                        Model Efficiency
-                      </div>
-                      <div className="space-y-6">
-                        <p className="text-slate-600 text-sm leading-relaxed">
-                          Currently fitting a <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md font-bold">SARIMA({params.p},{params.d},{params.q})({params.P},{params.D},{params.Q})_{params.s}</span> process to the imported series.
-                        </p>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                            <span className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-tighter">AIC (Akaike)</span>
-                            <span className="text-xl font-black text-slate-800">{result.diagnostics.aic.toFixed(2)}</span>
-                          </div>
-                          <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                            <span className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-tighter">Stationarity</span>
-                            <span className={`text-sm font-bold ${result.diagnostics.stationarity.includes('Stationary') ? 'text-emerald-600' : 'text-amber-600'}`}>
-                              {result.diagnostics.stationarity}
-                            </span>
-                          </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                     <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm col-span-1">
+                        <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                           <BarChart2 className="w-4 h-4 text-slate-400" /> Statistical Diagnostics
+                        </h4>
+                        <div className="space-y-4">
+                           <div className="flex justify-between items-center p-3 bg-slate-50 rounded border border-slate-100">
+                              <span className="text-xs font-semibold text-slate-500">AIC Score</span>
+                              <span className="font-mono font-bold text-slate-900">{result.diagnostics.aic.toFixed(2)}</span>
+                           </div>
+                           <div className="flex justify-between items-center p-3 bg-slate-50 rounded border border-slate-100">
+                              <span className="text-xs font-semibold text-slate-500">BIC Score</span>
+                              <span className="font-mono font-bold text-slate-900">{result.diagnostics.bic.toFixed(2)}</span>
+                           </div>
+                           <div className="p-3 bg-slate-50 rounded border border-slate-100">
+                              <span className="text-xs font-semibold text-slate-500 block mb-1">Stationarity Check</span>
+                              <span className={`text-xs font-bold ${result.diagnostics.stationarity.includes('Stationary') ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                {result.diagnostics.stationarity}
+                              </span>
+                           </div>
                         </div>
-                      </div>
-                    </div>
-                    <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center gap-2 mb-6 text-indigo-600 font-bold uppercase text-xs tracking-widest">
-                        <Info className="w-4 h-4" />
-                        AI Interpretation
-                      </div>
-                      <div className="text-slate-600 text-sm leading-relaxed bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
-                        {result.insights}
-                      </div>
-                    </div>
+                     </div>
+
+                     <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm col-span-2">
+                        <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                           <Info className="w-4 h-4 text-slate-400" /> Automated Model Interpretation
+                        </h4>
+                        <div className="prose prose-sm prose-slate max-w-none text-xs leading-relaxed text-slate-600">
+                           {result.insights}
+                        </div>
+                     </div>
                   </div>
                 )}
               </div>
