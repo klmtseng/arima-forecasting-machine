@@ -29,11 +29,18 @@ export interface AnalysisResult {
     description: string;
   };
   insights: string;
+  metrics?: {
+    mae: number;
+    rmse: number;
+    mape: number;
+  };
 }
 
 export interface ChartData {
   timestamp: string;
-  actual?: number;
+  actual?: number;       // Used for standard full history
+  trainValue?: number;   // Used during backtesting (observed)
+  testValue?: number;    // Used during backtesting (hidden/ground truth)
   forecast?: number;
   lower?: number;
   upper?: number;

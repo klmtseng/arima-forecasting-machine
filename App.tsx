@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart } from 'recharts';
-import { Activity, Upload, Settings, TrendingUp, BarChart2, Info, RefreshCw, AlertCircle, Trash2 } from 'lucide-react';
+import { Activity, Upload, Settings, TrendingUp, BarChart2, Info, RefreshCw, AlertCircle, Trash2, BookOpen, Target } from 'lucide-react';
 import { DataPoint, ModelParams, AnalysisResult, ChartData } from './types';
 import { runArimaAnalysis } from './services/arimaService';
 import { ParameterSidebar } from './components/ParameterSidebar';
 import { DataUploader } from './components/DataUploader';
 import { StatsSummary } from './components/StatsSummary';
+import { ModelGuide } from './components/ModelGuide';
 
 const DEFAULT_PARAMS: ModelParams = {
   p: 1, d: 1, q: 1,
@@ -19,6 +20,11 @@ const App: React.FC = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  
+  // Validation / Backtest State
+  const [mode, setMode] = useState<'forecast' | 'backtest'>('forecast');
+  const [splitRatio, setSplitRatio] = useState(0.8);
 
   const handleDataUpload = (uploadedData: DataPoint[]) => {
     setData(uploadedData);
@@ -39,8 +45,63 @@ const App: React.FC = () => {
     }
     setLoading(true);
     setError(null);
+
     try {
-      const analysis = await runArimaAnalysis(data, params);
+      let analysisInputData = data;
+      let steps = 12;
+      let splitIndex = -1;
+
+      if (mode === 'backtest') {
+        splitIndex = Math.floor(data.length * splitRatio);
+        analysisInputData = data.slice(0, splitIndex); // Train on first portion
+        steps = data.length - splitIndex; // Predict the rest
+      }
+
+      const analysis = await runArimaAnalysis(analysisInputData, params, steps);
+      
+      // If backtesting, calculate accuracy metrics and align dates
+      if (mode === 'backtest' && splitIndex > 0) {
+        const testSet = data.slice(splitIndex);
+        
+        // 1. Align forecast dates to actual test set dates (Gemini might guess wrong dates)
+        const alignedForecast = analysis.forecast.map((f, i) => {
+          if (testSet[i]) {
+            return { ...f, date: testSet[i].date };
+          }
+          return f;
+        });
+        analysis.forecast = alignedForecast;
+
+        // 2. Calculate Metrics
+        let sumAbsErr = 0;
+        let sumSqErr = 0;
+        let sumAbsPctErr = 0;
+        let count = 0;
+
+        for (let i = 0; i < alignedForecast.length; i++) {
+          const predicted = alignedForecast[i].value;
+          const actual = testSet[i]?.value;
+
+          if (actual !== undefined && !isNaN(actual)) {
+            const err = actual - predicted;
+            sumAbsErr += Math.abs(err);
+            sumSqErr += err * err;
+            if (actual !== 0) {
+              sumAbsPctErr += Math.abs(err / actual);
+            }
+            count++;
+          }
+        }
+
+        if (count > 0) {
+          analysis.metrics = {
+            mae: sumAbsErr / count,
+            rmse: Math.sqrt(sumSqErr / count),
+            mape: (sumAbsPctErr / count) * 100
+          };
+        }
+      }
+
       setResult(analysis);
     } catch (err) {
       setError("Failed to generate forecast. Check your parameters or data.");
@@ -53,27 +114,52 @@ const App: React.FC = () => {
   const chartData: ChartData[] = React.useMemo(() => {
     if (!data.length) return [];
     
-    const combined: ChartData[] = data.map(d => ({
+    // Determine split index for visualization
+    const splitIdx = mode === 'backtest' ? Math.floor(data.length * splitRatio) : data.length;
+
+    // Construct base data
+    const combined: ChartData[] = data.map((d, i) => ({
       timestamp: d.date,
-      actual: d.value,
+      // If backtest, split actual into train/test lines for visual distinction
+      trainValue: mode === 'backtest' ? (i < splitIdx ? d.value : undefined) : undefined,
+      testValue: mode === 'backtest' ? (i >= splitIdx - 1 ? d.value : undefined) : undefined, // overlap slightly to connect lines
+      actual: mode === 'forecast' ? d.value : undefined, // regular mode
     }));
 
     if (result) {
-      result.forecast.forEach(f => {
-        combined.push({
-          timestamp: f.date,
+      result.forecast.forEach((f, i) => {
+        // Find if we have an existing entry for this date (Backtest mode)
+        const existingIdx = combined.findIndex(c => c.timestamp === f.date);
+        
+        const dataPoint = {
           forecast: f.value,
           lower: f.lower,
           upper: f.upper,
-        });
+        };
+
+        if (existingIdx >= 0) {
+          // Merge with existing actual data
+          combined[existingIdx] = { ...combined[existingIdx], ...dataPoint };
+        } else {
+          // Append new future point
+          combined.push({
+            timestamp: f.date,
+            actual: undefined, 
+            trainValue: undefined,
+            testValue: undefined,
+            ...dataPoint
+          });
+        }
       });
     }
 
     return combined;
-  }, [data, result]);
+  }, [data, result, mode, splitRatio]);
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden text-slate-900">
+      <ModelGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
+
       {/* Header */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm z-10">
         <div className="flex items-center gap-3">
@@ -81,11 +167,19 @@ const App: React.FC = () => {
             <Activity className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">ARIMA Forecast Machine</h1>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">ARIMA Forecasting Machine</h1>
             <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Predictive Analytics Platform</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsGuideOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+          >
+            <BookOpen className="w-4 h-4" />
+            Model Guide
+          </button>
+          <div className="h-6 w-px bg-slate-200 mx-1"></div>
           {data.length > 0 && (
             <button 
               onClick={handleClear}
@@ -105,7 +199,7 @@ const App: React.FC = () => {
             }`}
           >
             {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
-            {loading ? 'Processing...' : 'Run Analysis'}
+            {loading ? (mode === 'backtest' ? 'Validating...' : 'Processing...') : (mode === 'backtest' ? 'Run Validation' : 'Run Forecast')}
           </button>
         </div>
       </header>
@@ -116,6 +210,11 @@ const App: React.FC = () => {
           params={params} 
           setParams={setParams} 
           hasData={data.length > 0} 
+          mode={mode}
+          setMode={setMode}
+          splitRatio={splitRatio}
+          setSplitRatio={setSplitRatio}
+          dataLength={data.length}
         />
 
         {/* Main Content Area */}
@@ -129,7 +228,10 @@ const App: React.FC = () => {
                 </div>
                 <h2 className="text-3xl font-black text-slate-800 mb-3">Welcome to the Forecasting Machine</h2>
                 <p className="text-slate-500 mb-10 max-w-lg mx-auto leading-relaxed">
-                  Start by uploading your time-series data or try one of our pre-built datasets below to see the machine in action.
+                  This machine specializes in <strong>Univariate ARIMA</strong> modeling. 
+                  However, our analysis engine also evaluates your data through <strong>Bayesian</strong> and <strong>Multivariate</strong> perspectives to provide holistic insights.
+                  <br/><br/>
+                  Start by uploading your time-series data or try one of our pre-built datasets.
                 </p>
                 <DataUploader onUpload={handleDataUpload} />
               </div>
@@ -150,6 +252,29 @@ const App: React.FC = () => {
                 {/* Stats Summary Cards */}
                 <StatsSummary result={result} dataCount={data.length} />
 
+                {/* Backtest Metrics Panel (Only visible if metrics exist) */}
+                {result?.metrics && mode === 'backtest' && (
+                  <div className="bg-indigo-900 text-white p-6 rounded-[2rem] shadow-lg shadow-indigo-900/20 animate-in slide-in-from-top-4">
+                    <div className="flex items-center gap-2 mb-4 opacity-80 uppercase tracking-widest text-xs font-bold">
+                      <Target className="w-4 h-4" /> Validation Accuracy
+                    </div>
+                    <div className="grid grid-cols-3 gap-8">
+                      <div>
+                        <div className="text-3xl font-black">{result.metrics.mape.toFixed(2)}%</div>
+                        <div className="text-xs text-indigo-300 font-medium mt-1">MAPE (Mean Absolute % Error)</div>
+                      </div>
+                      <div>
+                        <div className="text-3xl font-black">{result.metrics.rmse.toFixed(2)}</div>
+                        <div className="text-xs text-indigo-300 font-medium mt-1">RMSE (Root Mean Sq Error)</div>
+                      </div>
+                      <div>
+                        <div className="text-3xl font-black">{result.metrics.mae.toFixed(2)}</div>
+                        <div className="text-xs text-indigo-300 font-medium mt-1">MAE (Mean Absolute Error)</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Main Visualization */}
                 <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 p-8 relative overflow-hidden">
                   {loading && (
@@ -158,19 +283,29 @@ const App: React.FC = () => {
                         <RefreshCw className="w-12 h-12 text-indigo-600 animate-spin" />
                         <Activity className="w-6 h-6 text-indigo-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                       </div>
-                      <p className="font-bold text-slate-800 animate-pulse">Running ARIMA Simulations...</p>
+                      <p className="font-bold text-slate-800 animate-pulse">Running ARIMA & Bayesian Simulations...</p>
                     </div>
                   )}
 
                   <div className="flex items-center justify-between mb-8">
                     <div>
-                      <h3 className="text-xl font-black text-slate-800">Forecast Visualization</h3>
-                      <p className="text-sm text-slate-500">Time-series decomposition & projected values</p>
+                      <h3 className="text-xl font-black text-slate-800">
+                        {mode === 'backtest' ? 'Validation Analysis' : 'Forecast Visualization'}
+                      </h3>
+                      <p className="text-sm text-slate-500">
+                        {mode === 'backtest' ? 'Comparing predicted values against unseen historical data' : 'Time-series decomposition & projected values'}
+                      </p>
                     </div>
                     <div className="flex gap-3">
                       <span className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-slate-100 px-4 py-2 rounded-xl">
-                        <div className="w-2.5 h-2.5 rounded-full bg-indigo-600 shadow-sm shadow-indigo-300"></div> Historical
+                        <div className="w-2.5 h-2.5 rounded-full bg-indigo-600 shadow-sm shadow-indigo-300"></div> 
+                        {mode === 'backtest' ? 'Training Data' : 'Historical'}
                       </span>
+                      {mode === 'backtest' && (
+                        <span className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-slate-100 px-4 py-2 rounded-xl">
+                          <div className="w-2.5 h-2.5 rounded-full bg-slate-400 border border-slate-300"></div> Test Data (Actual)
+                        </span>
+                      )}
                       <span className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-slate-100 px-4 py-2 rounded-xl">
                         <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-300"></div> Model Forecast
                       </span>
@@ -237,6 +372,7 @@ const App: React.FC = () => {
                           legendType="none"
                         />
 
+                        {/* Standard Mode Line */}
                         <Line 
                           type="monotone" 
                           dataKey="actual" 
@@ -246,6 +382,29 @@ const App: React.FC = () => {
                           activeDot={{ r: 7, strokeWidth: 0 }} 
                           name="Historical Data"
                         />
+
+                        {/* Backtest Mode: Training Data */}
+                        <Line 
+                          type="monotone" 
+                          dataKey="trainValue" 
+                          stroke="#4f46e5" 
+                          strokeWidth={4} 
+                          dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} 
+                          name="Training Data"
+                        />
+
+                        {/* Backtest Mode: Test Data (Ground Truth) */}
+                        <Line 
+                          type="monotone" 
+                          dataKey="testValue" 
+                          stroke="#94a3b8" 
+                          strokeWidth={3} 
+                          strokeDasharray="4 4"
+                          dot={{ r: 3, fill: '#94a3b8', strokeWidth: 2, stroke: '#fff' }} 
+                          name="Validation Data"
+                        />
+
+                        {/* Forecast Line */}
                         <Line 
                           type="monotone" 
                           dataKey="forecast" 

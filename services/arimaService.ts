@@ -4,17 +4,26 @@ import { DataPoint, ModelParams, AnalysisResult } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export async function runArimaAnalysis(data: DataPoint[], params: ModelParams): Promise<AnalysisResult> {
+export async function runArimaAnalysis(data: DataPoint[], params: ModelParams, steps: number = 12): Promise<AnalysisResult> {
   const dataString = data.map(d => `${d.date}: ${d.value}`).join(', ');
   
   const prompt = `
-    Perform a professional ARIMA analysis on the following time series data: [${dataString}].
-    Use the following model parameters:
+    Perform a professional time series analysis on the following data: [${dataString}].
+    
+    TASK 1: CALCULATE FORECAST
+    Use a SARIMA model with these parameters:
     Non-seasonal: p=${params.p}, d=${params.d}, q=${params.q}
     Seasonal: P=${params.P}, D=${params.D}, Q=${params.Q}, s=${params.s} (if s > 0).
+    Calculate a ${steps}-point forecast with 95% confidence intervals (upper and lower bounds).
+    
+    TASK 2: DIAGNOSTICS
+    Evaluate model diagnostics like AIC, BIC, and stationarity.
 
-    Calculate a 12-point forecast with 95% confidence intervals (upper and lower bounds).
-    Also evaluate model diagnostics like AIC, BIC, and provide stationarity insights.
+    TASK 3: ADVANCED INSIGHTS
+    Provide a text summary (under 'insights') that:
+    1. Explains the trend and seasonality found in the data.
+    2. Critically evaluates if this ARIMA model is appropriate.
+    3. **CRITICAL**: Briefly discuss if a **Bayesian Structural Time Series (BSTS)** approach or a **Multivariate (VAR/ARIMAX)** model would potentially offer better results for this specific data pattern, and why. Use this to educate the user on alternative modeling perspectives.
     
     Data context: ${data.length} observations.
     Assume the user wants the most accurate mathematical approximation possible given these constraints.
