@@ -4,8 +4,72 @@ import { DataPoint, ModelParams, AnalysisResult } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// Optimized data formatter to save tokens
+const formatDataForPrompt = (data: DataPoint[]) => {
+  // If data is too large, take a representative sample (start, middle, end) to preserve trend/seasonality context
+  // but for < 500 points, we send it all.
+  const limit = 300;
+  let processedData = data;
+  
+  if (data.length > limit) {
+    const step = Math.ceil(data.length / limit);
+    processedData = data.filter((_, index) => index % step === 0);
+  }
+
+  return processedData.map(d => `${d.date}:${d.value}`).join('|');
+};
+
+export async function optimizeModelParameters(data: DataPoint[]): Promise<ModelParams> {
+  const dataString = formatDataForPrompt(data);
+
+  const prompt = `
+    Act as an expert Data Scientist performing an "Auto-ARIMA" procedure.
+    Analyze the following time series data: [${dataString}].
+
+    YOUR TASK:
+    Determine the optimal SARIMA(p,d,q)(P,D,Q)s parameters that would minimize the AIC (Akaike Information Criterion).
+    
+    STEPS:
+    1. Check for Stationarity (determine 'd'). If trending, d=1.
+    2. Check for Seasonality (determine 's', 'P', 'D', 'Q'). Look for repeating cycles.
+    3. Analyze ACF/PACF characteristics to estimate 'p' and 'q'.
+    
+    CONSTRAINTS:
+    - Return ONLY the integer parameters.
+    - 's' should be 0 if no clear seasonality is found, or the period length (e.g., 12, 7, 4) if found.
+    - Be conservative to avoid overfitting (prefer simpler models).
+  `;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          p: { type: Type.INTEGER },
+          d: { type: Type.INTEGER },
+          q: { type: Type.INTEGER },
+          P: { type: Type.INTEGER },
+          D: { type: Type.INTEGER },
+          Q: { type: Type.INTEGER },
+          s: { type: Type.INTEGER }
+        },
+        required: ["p", "d", "q", "P", "D", "Q", "s"]
+      },
+      // Using a slightly higher temperature to allow creative pattern recognition, 
+      // but low enough to maintain structure.
+      temperature: 0.2 
+    }
+  });
+
+  const jsonResult = JSON.parse(response.text || '{}');
+  return jsonResult as ModelParams;
+}
+
 export async function runArimaAnalysis(data: DataPoint[], params: ModelParams, steps: number = 12): Promise<AnalysisResult> {
-  const dataString = data.map(d => `${d.date}: ${d.value}`).join(', ');
+  const dataString = formatDataForPrompt(data);
   
   const prompt = `
     Perform a professional time series analysis on the following data: [${dataString}].

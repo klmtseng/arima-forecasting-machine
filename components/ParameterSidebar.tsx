@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { Settings, HelpCircle, ChevronRight, Sliders, PlayCircle, History, Info } from 'lucide-react';
-import { ModelParams } from '../types';
+import { Settings, HelpCircle, ChevronRight, Sliders, PlayCircle, History, Info, Wand2, Sparkles, Loader2 } from 'lucide-react';
+import { ModelParams, DataPoint } from '../types';
+import { optimizeModelParameters } from '../services/arimaService';
 
 interface ParameterSidebarProps {
   params: ModelParams;
@@ -12,6 +13,7 @@ interface ParameterSidebarProps {
   splitRatio: number;
   setSplitRatio: (ratio: number) => void;
   dataLength: number;
+  data: DataPoint[]; // Added data prop to pass to optimizer
 }
 
 const Tooltip: React.FC<{ text: string; title: string }> = ({ text, title }) => (
@@ -35,10 +37,27 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
   setMode,
   splitRatio,
   setSplitRatio,
-  dataLength
+  dataLength,
+  data
 }) => {
+  const [isOptimizing, setIsOptimizing] = useState(false);
+
   const handleChange = (key: keyof ModelParams, value: number) => {
     setParams(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleAutoTune = async () => {
+    if (!hasData) return;
+    setIsOptimizing(true);
+    try {
+      const optimalParams = await optimizeModelParameters(data);
+      setParams(optimalParams);
+    } catch (e) {
+      console.error("Optimization failed", e);
+      // Optional: Add toast notification here
+    } finally {
+      setIsOptimizing(false);
+    }
   };
 
   const trainCount = Math.floor(dataLength * splitRatio);
@@ -74,7 +93,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
         {mode === 'backtest' && hasData && (
           <div className="bg-slate-50 p-3 rounded border border-slate-200 animate-in slide-in-from-top-2 duration-300">
              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Historical Split</h3>
+                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Training Window</h3>
                 <span className="text-[10px] font-mono bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">
                   {Math.round(splitRatio * 100)}%
                 </span>
@@ -89,18 +108,59 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                 className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 mb-2"
              />
              <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-600 font-medium">
-               <div className="bg-white px-2 py-1 rounded border border-slate-100">Train: <span className="font-mono">{trainCount}</span></div>
-               <div className="bg-white px-2 py-1 rounded border border-slate-100">Test: <span className="font-mono">{testCount}</span></div>
+               <div className="bg-white px-2 py-1 rounded border border-slate-100 text-center">
+                  <span className="block text-slate-400 text-[9px] uppercase">History</span>
+                  <span className="font-mono font-bold text-slate-800">{trainCount}</span>
+               </div>
+               <div className="bg-white px-2 py-1 rounded border border-slate-100 text-center">
+                  <span className="block text-slate-400 text-[9px] uppercase">Predicting</span>
+                  <span className="font-mono font-bold text-slate-800">{testCount}</span>
+               </div>
              </div>
+             <p className="text-[9px] text-slate-400 mt-2 text-center leading-tight">
+               Adjust slider to roll the origin forward.
+             </p>
           </div>
         )}
 
         <hr className="border-slate-100" />
 
         <div>
-          <div className="flex items-center gap-2 mb-4 text-slate-800 font-bold text-sm">
-            <Sliders className="w-4 h-4 text-slate-500" />
-            <h2>Parameters</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+              <Sliders className="w-4 h-4 text-slate-500" />
+              <h2>Parameters</h2>
+            </div>
+          </div>
+          
+          {/* AutoML Button */}
+          <div className="mb-6">
+            <button
+              onClick={handleAutoTune}
+              disabled={!hasData || isOptimizing}
+              className={`w-full relative overflow-hidden group rounded-lg p-0.5 transition-all ${
+                 !hasData || isOptimizing ? 'bg-slate-200 cursor-not-allowed' : 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 hover:shadow-lg hover:shadow-indigo-500/20 active:scale-95'
+              }`}
+            >
+              <div className={`relative flex items-center justify-center gap-2 px-4 py-2 bg-white rounded-[6px] transition-all ${
+                 !hasData || isOptimizing ? 'bg-slate-50' : 'group-hover:bg-opacity-95'
+              }`}>
+                {isOptimizing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 text-indigo-600 animate-spin" />
+                    <span className="text-xs font-bold text-indigo-600">Optimizing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className={`w-4 h-4 ${!hasData ? 'text-slate-400' : 'text-indigo-600'}`} />
+                    <span className={`text-xs font-bold ${!hasData ? 'text-slate-400' : 'text-indigo-900'}`}>Auto-Tune Model</span>
+                  </>
+                )}
+              </div>
+            </button>
+            <p className="text-[9px] text-slate-400 mt-2 text-center">
+              Uses AI to find parameters that minimize AIC.
+            </p>
           </div>
 
           <div className="space-y-6">

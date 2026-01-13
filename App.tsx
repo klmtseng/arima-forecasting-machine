@@ -1,10 +1,10 @@
 
 import React, { useState, useMemo } from 'react';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart, ReferenceLine, Label 
 } from 'recharts';
 import { 
-  Activity, Upload, Settings, TrendingUp, BarChart2, Info, RefreshCw, AlertCircle, Trash2, BookOpen, Target, ChevronRight, CheckCircle2, AlertTriangle, XCircle 
+  Activity, Upload, Settings, TrendingUp, BarChart2, Info, RefreshCw, AlertCircle, Trash2, BookOpen, Target, ChevronRight, CheckCircle2, AlertTriangle, XCircle, History 
 } from 'lucide-react';
 import { DataPoint, ModelParams, AnalysisResult, ChartData } from './types';
 import { runArimaAnalysis } from './services/arimaService';
@@ -114,6 +114,13 @@ const App: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Helper to get the cutoff date string for ReferenceLine
+  const splitDate = useMemo(() => {
+    if (mode !== 'backtest' || !data.length) return null;
+    const idx = Math.floor(data.length * splitRatio);
+    return data[idx]?.date;
+  }, [data, splitRatio, mode]);
 
   const chartData: ChartData[] = useMemo(() => {
     if (!data.length) return [];
@@ -225,6 +232,7 @@ const App: React.FC = () => {
           splitRatio={splitRatio}
           setSplitRatio={setSplitRatio}
           dataLength={data.length}
+          data={data}
         />
 
         {/* Main Content Area */}
@@ -316,6 +324,11 @@ const App: React.FC = () => {
                         <div className="text-3xl font-mono font-bold text-slate-300">{result.metrics.rmse.toFixed(2)}</div>
                         <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">RMSE</div>
                       </div>
+
+                      <div className="text-right hidden sm:block">
+                        <div className="text-3xl font-mono font-bold text-slate-300">{result.metrics.mae.toFixed(2)}</div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">MAE</div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -334,7 +347,7 @@ const App: React.FC = () => {
                   <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
                     <div>
                       <h3 className="text-lg font-bold text-slate-800">
-                        {mode === 'backtest' ? 'Validation Matrix' : 'Forecast Trajectory'}
+                        {mode === 'backtest' ? 'Backtest Rolling Origin' : 'Forecast Trajectory'}
                       </h3>
                       <p className="text-xs text-slate-500 font-mono mt-1">
                         MODEL: SARIMA({params.p},{params.d},{params.q})({params.P},{params.D},{params.Q})_{params.s}
@@ -343,7 +356,7 @@ const App: React.FC = () => {
                     <div className="flex gap-2">
                       <span className="flex items-center gap-2 text-[10px] font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded border border-slate-200">
                         <div className="w-2 h-2 rounded-full bg-slate-900"></div> 
-                        {mode === 'backtest' ? 'TRAINING' : 'HISTORY'}
+                        {mode === 'backtest' ? 'TRAINING HISTORY' : 'HISTORY'}
                       </span>
                       {mode === 'backtest' && (
                         <span className="flex items-center gap-2 text-[10px] font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded border border-slate-200">
@@ -394,6 +407,24 @@ const App: React.FC = () => {
                         />
                         <Legend verticalAlign="top" align="right" height={36} iconType="rect" wrapperStyle={{ fontSize: '10px', fontWeight: 600, opacity: 0 }} />
                         
+                        {/* Reference Line for Split */}
+                        {splitDate && (
+                          <ReferenceLine 
+                            x={splitDate} 
+                            stroke="#dc2626" 
+                            strokeDasharray="3 3" 
+                            strokeWidth={1.5}
+                            label={{ 
+                              position: 'top', 
+                              value: 'CUTOFF', 
+                              fill: '#dc2626', 
+                              fontSize: 10, 
+                              fontWeight: 'bold', 
+                              dy: -10 
+                            }} 
+                          />
+                        )}
+
                         <Area 
                           type="monotone" 
                           dataKey="upper" 
@@ -411,26 +442,32 @@ const App: React.FC = () => {
                           legendType="none"
                         />
 
+                        {/* Standard History (Forecast Mode) */}
                         <Line 
                           type="monotone" 
                           dataKey="actual" 
+                          name="Historical Data"
                           stroke="#0f172a" 
                           strokeWidth={2} 
                           dot={false}
                           activeDot={{ r: 4 }} 
                         />
 
+                        {/* Backtest Training Portion */}
                         <Line 
                           type="monotone" 
                           dataKey="trainValue" 
+                          name="Training Window"
                           stroke="#0f172a" 
                           strokeWidth={2} 
                           dot={false}
                         />
 
+                        {/* Backtest Validation Portion (Dashed) */}
                         <Line 
                           type="monotone" 
                           dataKey="testValue" 
+                          name="Future (Test Data)"
                           stroke="#94a3b8" 
                           strokeWidth={2} 
                           strokeDasharray="3 3"
@@ -440,6 +477,7 @@ const App: React.FC = () => {
                         <Line 
                           type="monotone" 
                           dataKey="forecast" 
+                          name="Model Prediction"
                           stroke="#10b981" 
                           strokeWidth={2} 
                           dot={{ r: 3, fill: '#10b981', strokeWidth: 1, stroke: '#fff' }} 
