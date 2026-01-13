@@ -1,0 +1,5 @@
+{
+  "name": "ARIMA Forecasting Machine",
+  "description": "An advanced visual analytics platform for time series forecasting using ARIMA and SARIMA models, powered by Gemini for intelligent parameter estimation and analysis.",
+  "requestFramePermissions": []
+}
