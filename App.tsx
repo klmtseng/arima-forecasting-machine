@@ -1,15 +1,16 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart, ReferenceLine, Label 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart, ReferenceLine, Label, Brush 
 } from 'recharts';
 import { 
-  Activity, Upload, Settings, TrendingUp, BarChart2, Info, RefreshCw, AlertCircle, Trash2, BookOpen, Target, ChevronRight, CheckCircle2, AlertTriangle, XCircle, History 
+  Activity, Upload, Settings, TrendingUp, BarChart2, Info, RefreshCw, AlertCircle, Trash2, BookOpen, Target, ChevronRight, CheckCircle2, AlertTriangle, XCircle, History, Database, FileText, Microscope, Calendar, Sigma, MoveHorizontal 
 } from 'lucide-react';
-import { DataPoint, ModelParams, AnalysisResult, ChartData } from './types';
-import { runArimaAnalysis } from './services/arimaService';
+import { DataPoint, ModelParams, AnalysisResult, ChartData, DatasetStats } from './types';
+import { runArimaAnalysis, getDescriptiveStats } from './services/arimaService';
 import { ParameterSidebar } from './components/ParameterSidebar';
 import { DataUploader } from './components/DataUploader';
+import { MacroDataSelector } from './components/MacroDataSelector';
 import { StatsSummary } from './components/StatsSummary';
 import { ModelGuide } from './components/ModelGuide';
 
@@ -20,6 +21,7 @@ const DEFAULT_PARAMS: ModelParams = {
 
 const App: React.FC = () => {
   const [data, setData] = useState<DataPoint[]>([]);
+  const [datasetStats, setDatasetStats] = useState<DatasetStats | null>(null);
   const [params, setParams] = useState<ModelParams>(DEFAULT_PARAMS);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -30,14 +32,22 @@ const App: React.FC = () => {
   const [mode, setMode] = useState<'forecast' | 'backtest'>('forecast');
   const [splitRatio, setSplitRatio] = useState(0.8);
 
-  const handleDataUpload = (uploadedData: DataPoint[]) => {
-    setData(uploadedData);
+  // Initialization Mode
+  const [initTab, setInitTab] = useState<'upload' | 'macro'>('macro');
+  const [datasetName, setDatasetName] = useState<string>('');
+
+  const handleDataLoad = (loadedData: DataPoint[], name: string) => {
+    setData(loadedData);
+    setDatasetName(name);
+    setDatasetStats(getDescriptiveStats(loadedData));
     setResult(null);
     setError(null);
   };
 
   const handleClear = () => {
     setData([]);
+    setDatasetName('');
+    setDatasetStats(null);
     setResult(null);
     setError(null);
   };
@@ -186,6 +196,7 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-900 leading-tight">QuantForecast<span className="text-slate-400 font-light">.ai</span></h1>
+            {datasetName && <span className="text-[10px] text-slate-500 font-mono block">SRC: {datasetName}</span>}
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -240,35 +251,44 @@ const App: React.FC = () => {
           <div className="max-w-7xl mx-auto space-y-6">
             
             {!data.length && (
-              <div className="bg-white border border-slate-200 rounded-lg p-10 text-center shadow-sm mt-8 max-w-4xl mx-auto">
+              <div className="bg-white border border-slate-200 rounded-lg p-8 text-center shadow-sm mt-8 max-w-4xl mx-auto">
                 <div className="mx-auto w-16 h-16 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mb-6">
-                  <Upload className="w-8 h-8 text-slate-400" />
+                  <Database className="w-8 h-8 text-indigo-500" />
                 </div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Initialize Forecasting Engine</h2>
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">Macroeconomic Research Terminal</h2>
                 <p className="text-slate-500 mb-8 max-w-md mx-auto">
-                  Import time-series data to begin analysis. The engine supports CSV formats with automated date inference.
+                   Connect to live global databases (FRED, World Bank, BLS) or upload proprietary datasets for ARIMA/SARIMA modelling.
                 </p>
                 
-                {/* Workflow Guide */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left max-w-3xl mx-auto mb-10">
-                  <div className="p-4 bg-slate-50 rounded border border-slate-100">
-                    <span className="text-xs font-bold text-slate-400 uppercase">Step 01</span>
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mt-1">Import Data <ChevronRight className="w-4 h-4 text-slate-300"/></h3>
-                    <p className="text-xs text-slate-500 mt-2">Upload a CSV file or load a financial sample below. Ensure data is clean.</p>
-                  </div>
-                  <div className="p-4 bg-slate-50 rounded border border-slate-100">
-                    <span className="text-xs font-bold text-slate-400 uppercase">Step 02</span>
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mt-1">Configure Model <ChevronRight className="w-4 h-4 text-slate-300"/></h3>
-                    <p className="text-xs text-slate-500 mt-2">Use the sidebar to tune ARIMA parameters (p,d,q) or switch to Backtest mode.</p>
-                  </div>
-                  <div className="p-4 bg-slate-50 rounded border border-slate-100">
-                    <span className="text-xs font-bold text-slate-400 uppercase">Step 03</span>
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mt-1">Analyze & Verify</h3>
-                    <p className="text-xs text-slate-500 mt-2">Run the computation. Check AIC/BIC scores and visual fit to validate accuracy.</p>
+                {/* Initialization Tabs */}
+                <div className="mb-8 flex justify-center">
+                  <div className="bg-slate-100 p-1 rounded-lg inline-flex">
+                    <button
+                      onClick={() => setInitTab('macro')}
+                      className={`flex items-center gap-2 px-6 py-2 rounded-md text-sm font-bold transition-all ${
+                        initTab === 'macro' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <Database className="w-4 h-4" /> Live Macro Data
+                    </button>
+                    <button
+                      onClick={() => setInitTab('upload')}
+                      className={`flex items-center gap-2 px-6 py-2 rounded-md text-sm font-bold transition-all ${
+                        initTab === 'upload' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <FileText className="w-4 h-4" /> CSV Upload / Sample
+                    </button>
                   </div>
                 </div>
 
-                <DataUploader onUpload={handleDataUpload} />
+                <div className="animate-in fade-in slide-in-from-bottom-2">
+                   {initTab === 'macro' ? (
+                     <MacroDataSelector onDataLoaded={handleDataLoad} />
+                   ) : (
+                     <DataUploader onUpload={(d) => handleDataLoad(d, "Uploaded Dataset")} />
+                   )}
+                </div>
               </div>
             )}
 
@@ -284,12 +304,65 @@ const App: React.FC = () => {
 
             {data.length > 0 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {/* Stats Summary Cards */}
-                <StatsSummary result={result} dataCount={data.length} />
+                
+                {/* WORKBENCH: Data Context Bar */}
+                <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+                  <div className="flex items-center gap-2 mb-4">
+                     <Microscope className="w-4 h-4 text-indigo-500" />
+                     <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Data Workbench</h3>
+                  </div>
+                  
+                  {datasetStats && (
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      <div className="p-3 bg-slate-50 rounded border border-slate-100">
+                         <div className="flex items-center gap-2 text-slate-500 mb-1">
+                            <Calendar className="w-3 h-3" /> <span className="text-[10px] uppercase font-bold">Range</span>
+                         </div>
+                         <div className="font-mono text-xs font-semibold text-slate-800 truncate">
+                            {data[0]?.date} <span className="text-slate-400">to</span> {data[data.length-1]?.date}
+                         </div>
+                      </div>
+                      
+                      <div className="p-3 bg-slate-50 rounded border border-slate-100">
+                         <div className="flex items-center gap-2 text-slate-500 mb-1">
+                            <Sigma className="w-3 h-3" /> <span className="text-[10px] uppercase font-bold">Mean</span>
+                         </div>
+                         <div className="font-mono text-lg font-bold text-slate-800">
+                            {datasetStats.mean.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                         </div>
+                      </div>
 
-                {/* Backtest Metrics Panel */}
+                       <div className="p-3 bg-slate-50 rounded border border-slate-100">
+                         <div className="flex items-center gap-2 text-slate-500 mb-1">
+                            <MoveHorizontal className="w-3 h-3" /> <span className="text-[10px] uppercase font-bold">Range (Min/Max)</span>
+                         </div>
+                         <div className="font-mono text-xs font-semibold text-slate-800">
+                            L: {datasetStats.min.toLocaleString()} / H: {datasetStats.max.toLocaleString()}
+                         </div>
+                      </div>
+
+                      <div className="p-3 bg-slate-50 rounded border border-slate-100">
+                         <div className="flex items-center gap-2 text-slate-500 mb-1">
+                            <Activity className="w-3 h-3" /> <span className="text-[10px] uppercase font-bold">Volatility</span>
+                         </div>
+                         <div className={`font-mono text-lg font-bold ${datasetStats.volatility > 20 ? 'text-amber-600' : 'text-slate-800'}`}>
+                            {datasetStats.volatility.toFixed(1)}%
+                         </div>
+                      </div>
+                      
+                      <div className="p-3 bg-indigo-50/50 rounded border border-indigo-100 flex flex-col justify-center items-center text-center">
+                         <span className="text-[10px] text-indigo-400 uppercase font-bold mb-1">Status</span>
+                         <span className="text-xs font-bold text-indigo-700">
+                           {result ? 'Analysis Complete' : 'Ready to Forecast'}
+                         </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Backtest Metrics Panel (Only shows AFTER analysis) */}
                 {result?.metrics && mode === 'backtest' && (
-                  <div className="bg-slate-800 text-white p-6 rounded-lg shadow-md flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="bg-slate-800 text-white p-6 rounded-lg shadow-md flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-2">
                     <div className="flex items-center gap-4">
                       <div className="p-3 bg-slate-700 rounded-lg">
                         <Target className="w-6 h-6 text-emerald-400" />
@@ -333,7 +406,7 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                {/* Main Visualization */}
+                {/* Main Visualization Workbench */}
                 <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 relative overflow-hidden">
                   {loading && (
                     <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center gap-4">
@@ -347,10 +420,10 @@ const App: React.FC = () => {
                   <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
                     <div>
                       <h3 className="text-lg font-bold text-slate-800">
-                        {mode === 'backtest' ? 'Backtest Rolling Origin' : 'Forecast Trajectory'}
+                        {result ? (mode === 'backtest' ? 'Backtest Rolling Origin' : 'Forecast Trajectory') : 'Visual Analysis'}
                       </h3>
                       <p className="text-xs text-slate-500 font-mono mt-1">
-                        MODEL: SARIMA({params.p},{params.d},{params.q})({params.P},{params.D},{params.Q})_{params.s}
+                        {result ? `MODEL: SARIMA(${params.p},${params.d},${params.q})(${params.P},${params.D},${params.Q})_${params.s}` : 'Raw Time Series Visualization'}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -363,9 +436,11 @@ const App: React.FC = () => {
                           <div className="w-2 h-2 rounded-full bg-slate-400"></div> VALIDATION
                         </span>
                       )}
-                      <span className="flex items-center gap-2 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded border border-emerald-100">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div> PROJECTION
-                      </span>
+                      {result && (
+                        <span className="flex items-center gap-2 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded border border-emerald-100">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div> PROJECTION
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -395,6 +470,7 @@ const App: React.FC = () => {
                           axisLine={false} 
                           tickFormatter={(val) => val.toLocaleString()}
                           dx={-10}
+                          domain={['auto', 'auto']}
                         />
                         <Tooltip 
                           contentStyle={{ 
@@ -425,22 +501,35 @@ const App: React.FC = () => {
                           />
                         )}
 
-                        <Area 
-                          type="monotone" 
-                          dataKey="upper" 
-                          stroke="none" 
-                          fill="#10b981" 
-                          fillOpacity={0.1} 
-                          legendType="none"
+                        <Brush 
+                            dataKey="timestamp" 
+                            height={20} 
+                            stroke="#cbd5e1" 
+                            fill="#f8fafc" 
+                            tickFormatter={() => ''}
+                            travellerWidth={10}
                         />
-                        <Area 
-                          type="monotone" 
-                          dataKey="lower" 
-                          stroke="none" 
-                          fill="#ffffff" 
-                          fillOpacity={1} 
-                          legendType="none"
-                        />
+
+                        {result && (
+                            <>
+                                <Area 
+                                type="monotone" 
+                                dataKey="upper" 
+                                stroke="none" 
+                                fill="#10b981" 
+                                fillOpacity={0.1} 
+                                legendType="none"
+                                />
+                                <Area 
+                                type="monotone" 
+                                dataKey="lower" 
+                                stroke="none" 
+                                fill="#ffffff" 
+                                fillOpacity={1} 
+                                legendType="none"
+                                />
+                            </>
+                        )}
 
                         {/* Standard History (Forecast Mode) */}
                         <Line 
@@ -487,40 +576,54 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Analysis Insights */}
-                {result && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                     <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm col-span-1">
-                        <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
-                           <BarChart2 className="w-4 h-4 text-slate-400" /> Statistical Diagnostics
-                        </h4>
-                        <div className="space-y-4">
-                           <div className="flex justify-between items-center p-3 bg-slate-50 rounded border border-slate-100">
-                              <span className="text-xs font-semibold text-slate-500">AIC Score</span>
-                              <span className="font-mono font-bold text-slate-900">{result.diagnostics.aic.toFixed(2)}</span>
-                           </div>
-                           <div className="flex justify-between items-center p-3 bg-slate-50 rounded border border-slate-100">
-                              <span className="text-xs font-semibold text-slate-500">BIC Score</span>
-                              <span className="font-mono font-bold text-slate-900">{result.diagnostics.bic.toFixed(2)}</span>
-                           </div>
-                           <div className="p-3 bg-slate-50 rounded border border-slate-100">
-                              <span className="text-xs font-semibold text-slate-500 block mb-1">Stationarity Check</span>
-                              <span className={`text-xs font-bold ${result.diagnostics.stationarity.includes('Stationary') ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                {result.diagnostics.stationarity}
-                              </span>
-                           </div>
-                        </div>
-                     </div>
+                {/* Analysis Insights & Stats - Only show if Result exists */}
+                {result ? (
+                  <>
+                    <StatsSummary result={result} dataCount={data.length} />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-2">
+                         <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm col-span-1">
+                            <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                               <BarChart2 className="w-4 h-4 text-slate-400" /> Statistical Diagnostics
+                            </h4>
+                            <div className="space-y-4">
+                               <div className="flex justify-between items-center p-3 bg-slate-50 rounded border border-slate-100">
+                                  <span className="text-xs font-semibold text-slate-500">AIC Score</span>
+                                  <span className="font-mono font-bold text-slate-900">{result.diagnostics.aic.toFixed(2)}</span>
+                               </div>
+                               <div className="flex justify-between items-center p-3 bg-slate-50 rounded border border-slate-100">
+                                  <span className="text-xs font-semibold text-slate-500">BIC Score</span>
+                                  <span className="font-mono font-bold text-slate-900">{result.diagnostics.bic.toFixed(2)}</span>
+                               </div>
+                               <div className="p-3 bg-slate-50 rounded border border-slate-100">
+                                  <span className="text-xs font-semibold text-slate-500 block mb-1">Stationarity Check</span>
+                                  <span className={`text-xs font-bold ${result.diagnostics.stationarity.includes('Stationary') ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                    {result.diagnostics.stationarity}
+                                  </span>
+                               </div>
+                            </div>
+                         </div>
 
-                     <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm col-span-2">
-                        <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
-                           <Info className="w-4 h-4 text-slate-400" /> Automated Model Interpretation
-                        </h4>
-                        <div className="prose prose-sm prose-slate max-w-none text-xs leading-relaxed text-slate-600">
-                           {result.insights}
+                         <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm col-span-2">
+                            <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                               <Info className="w-4 h-4 text-slate-400" /> Automated Model Interpretation
+                            </h4>
+                            <div className="prose prose-sm prose-slate max-w-none text-xs leading-relaxed text-slate-600">
+                               {result.insights}
+                            </div>
+                         </div>
+                      </div>
+                  </>
+                ) : (
+                    /* Placeholder for Results when in Workbench mode but no analysis run yet */
+                    <div className="bg-slate-50 border border-slate-200 border-dashed rounded-lg p-8 text-center">
+                        <div className="inline-flex p-3 bg-white rounded-full shadow-sm mb-3">
+                            <TrendingUp className="w-5 h-5 text-slate-300" />
                         </div>
-                     </div>
-                  </div>
+                        <h4 className="text-sm font-bold text-slate-600">Ready to Analyze</h4>
+                        <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                            Configure your ARIMA parameters in the sidebar or click "Auto-Tune" to generate a forecast model.
+                        </p>
+                    </div>
                 )}
               </div>
             )}

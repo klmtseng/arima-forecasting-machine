@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { DataPoint, ModelParams, AnalysisResult } from "../types";
+import { DataPoint, ModelParams, AnalysisResult, DatasetStats } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -18,6 +18,28 @@ const formatDataForPrompt = (data: DataPoint[]) => {
 
   return processedData.map(d => `${d.date}:${d.value}`).join('|');
 };
+
+export function getDescriptiveStats(data: DataPoint[]): DatasetStats {
+  if (data.length === 0) {
+    return { mean: 0, min: 0, max: 0, stdDev: 0, count: 0, volatility: 0 };
+  }
+
+  const values = data.map(d => d.value);
+  const sum = values.reduce((a, b) => a + b, 0);
+  const mean = sum / values.length;
+  
+  const sorted = [...values].sort((a, b) => a - b);
+  const min = sorted[0];
+  const max = sorted[sorted.length - 1];
+  
+  const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+  const stdDev = Math.sqrt(variance);
+  
+  // Volatility (Coefficient of Variation) as percentage
+  const volatility = mean !== 0 ? (stdDev / Math.abs(mean)) * 100 : 0;
+
+  return { mean, min, max, stdDev, count: values.length, volatility };
+}
 
 export async function optimizeModelParameters(data: DataPoint[]): Promise<ModelParams> {
   const dataString = formatDataForPrompt(data);

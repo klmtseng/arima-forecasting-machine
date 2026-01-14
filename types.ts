@@ -20,6 +20,15 @@ export interface ForecastPoint extends DataPoint {
   isForecast?: boolean;
 }
 
+export interface DatasetStats {
+  mean: number;
+  min: number;
+  max: number;
+  stdDev: number;
+  count: number;
+  volatility: number; // Coeff of variation
+}
+
 export interface AnalysisResult {
   forecast: ForecastPoint[];
   diagnostics: {
