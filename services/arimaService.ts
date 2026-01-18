@@ -102,8 +102,9 @@ export async function runArimaAnalysis(data: DataPoint[], params: ModelParams, s
     Seasonal: P=${params.P}, D=${params.D}, Q=${params.Q}, s=${params.s} (if s > 0).
     Calculate a ${steps}-point forecast with 95% confidence intervals (upper and lower bounds).
     
-    TASK 2: DIAGNOSTICS
-    Evaluate model diagnostics like AIC, BIC, and stationarity.
+    TASK 2: DIAGNOSTICS & DESCRIPTION
+    1. Evaluate model diagnostics like AIC, BIC, and stationarity.
+    2. description: Write a 1-2 sentence technical description of the data's behavior (trend, seasonality, volatility). e.g. "The series exhibits a strong linear upward trend with distinct annual seasonality and increasing variance over time."
 
     TASK 3: ADVANCED INSIGHTS
     Provide a text summary (under 'insights') that:

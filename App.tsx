@@ -233,7 +233,7 @@ const App: React.FC = () => {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
+        {/* Sidebar now handles both Workbench Stats AND Parameters */}
         <ParameterSidebar 
           params={params} 
           setParams={setParams} 
@@ -244,6 +244,7 @@ const App: React.FC = () => {
           setSplitRatio={setSplitRatio}
           dataLength={data.length}
           data={data}
+          datasetStats={datasetStats}
         />
 
         {/* Main Content Area */}
@@ -305,60 +306,7 @@ const App: React.FC = () => {
             {data.length > 0 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 
-                {/* WORKBENCH: Data Context Bar */}
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
-                  <div className="flex items-center gap-2 mb-4">
-                     <Microscope className="w-4 h-4 text-indigo-500" />
-                     <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Data Workbench</h3>
-                  </div>
-                  
-                  {datasetStats && (
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                      <div className="p-3 bg-slate-50 rounded border border-slate-100">
-                         <div className="flex items-center gap-2 text-slate-500 mb-1">
-                            <Calendar className="w-3 h-3" /> <span className="text-[10px] uppercase font-bold">Range</span>
-                         </div>
-                         <div className="font-mono text-xs font-semibold text-slate-800 truncate">
-                            {data[0]?.date} <span className="text-slate-400">to</span> {data[data.length-1]?.date}
-                         </div>
-                      </div>
-                      
-                      <div className="p-3 bg-slate-50 rounded border border-slate-100">
-                         <div className="flex items-center gap-2 text-slate-500 mb-1">
-                            <Sigma className="w-3 h-3" /> <span className="text-[10px] uppercase font-bold">Mean</span>
-                         </div>
-                         <div className="font-mono text-lg font-bold text-slate-800">
-                            {datasetStats.mean.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                         </div>
-                      </div>
-
-                       <div className="p-3 bg-slate-50 rounded border border-slate-100">
-                         <div className="flex items-center gap-2 text-slate-500 mb-1">
-                            <MoveHorizontal className="w-3 h-3" /> <span className="text-[10px] uppercase font-bold">Range (Min/Max)</span>
-                         </div>
-                         <div className="font-mono text-xs font-semibold text-slate-800">
-                            L: {datasetStats.min.toLocaleString()} / H: {datasetStats.max.toLocaleString()}
-                         </div>
-                      </div>
-
-                      <div className="p-3 bg-slate-50 rounded border border-slate-100">
-                         <div className="flex items-center gap-2 text-slate-500 mb-1">
-                            <Activity className="w-3 h-3" /> <span className="text-[10px] uppercase font-bold">Volatility</span>
-                         </div>
-                         <div className={`font-mono text-lg font-bold ${datasetStats.volatility > 20 ? 'text-amber-600' : 'text-slate-800'}`}>
-                            {datasetStats.volatility.toFixed(1)}%
-                         </div>
-                      </div>
-                      
-                      <div className="p-3 bg-indigo-50/50 rounded border border-indigo-100 flex flex-col justify-center items-center text-center">
-                         <span className="text-[10px] text-indigo-400 uppercase font-bold mb-1">Status</span>
-                         <span className="text-xs font-bold text-indigo-700">
-                           {result ? 'Analysis Complete' : 'Ready to Forecast'}
-                         </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {/* NOTE: Data Workbench stats moved to Sidebar */}
 
                 {/* Backtest Metrics Panel (Only shows AFTER analysis) */}
                 {result?.metrics && mode === 'backtest' && (
@@ -407,7 +355,7 @@ const App: React.FC = () => {
                 )}
 
                 {/* Main Visualization Workbench */}
-                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 relative overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 relative overflow-hidden h-[500px] flex flex-col">
                   {loading && (
                     <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center gap-4">
                       <div className="relative">
@@ -417,7 +365,7 @@ const App: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
+                  <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4 flex-shrink-0">
                     <div>
                       <h3 className="text-lg font-bold text-slate-800">
                         {result ? (mode === 'backtest' ? 'Backtest Rolling Origin' : 'Forecast Trajectory') : 'Visual Analysis'}
@@ -444,7 +392,7 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="h-[400px] w-full">
+                  <div className="flex-1 w-full min-h-0">
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <defs>
@@ -576,6 +524,19 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
+                {/* NEW: Data Description below chart */}
+                {result && (
+                    <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm flex gap-4 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="p-3 bg-slate-100 rounded-lg h-fit">
+                            <FileText className="w-6 h-6 text-slate-500" />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-slate-900">Data Series Description</h4>
+                            <p className="text-sm text-slate-600 mt-1">{result.diagnostics.description}</p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Analysis Insights & Stats - Only show if Result exists */}
                 {result ? (
                   <>
@@ -615,7 +576,7 @@ const App: React.FC = () => {
                   </>
                 ) : (
                     /* Placeholder for Results when in Workbench mode but no analysis run yet */
-                    <div className="bg-slate-50 border border-slate-200 border-dashed rounded-lg p-8 text-center">
+                    <div className="bg-slate-50 border border-slate-200 border-dashed rounded-lg p-8 text-center h-[200px] flex flex-col items-center justify-center">
                         <div className="inline-flex p-3 bg-white rounded-full shadow-sm mb-3">
                             <TrendingUp className="w-5 h-5 text-slate-300" />
                         </div>

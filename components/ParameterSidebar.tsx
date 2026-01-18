@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { Settings, HelpCircle, ChevronRight, Sliders, PlayCircle, History, Info, Wand2, Sparkles, Loader2 } from 'lucide-react';
-import { ModelParams, DataPoint } from '../types';
+import { Settings, HelpCircle, ChevronRight, Sliders, PlayCircle, History, Info, Wand2, Sparkles, Loader2, Microscope, Sigma, Activity, MoveHorizontal, Calendar } from 'lucide-react';
+import { ModelParams, DataPoint, DatasetStats } from '../types';
 import { optimizeModelParameters } from '../services/arimaService';
 
 interface ParameterSidebarProps {
@@ -13,7 +13,8 @@ interface ParameterSidebarProps {
   splitRatio: number;
   setSplitRatio: (ratio: number) => void;
   dataLength: number;
-  data: DataPoint[]; // Added data prop to pass to optimizer
+  data: DataPoint[];
+  datasetStats: DatasetStats | null; // Added stats prop
 }
 
 const Tooltip: React.FC<{ text: string; title: string }> = ({ text, title }) => (
@@ -38,7 +39,8 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
   splitRatio,
   setSplitRatio,
   dataLength,
-  data
+  data,
+  datasetStats
 }) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
 
@@ -54,7 +56,6 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
       setParams(optimalParams);
     } catch (e) {
       console.error("Optimization failed", e);
-      // Optional: Add toast notification here
     } finally {
       setIsOptimizing(false);
     }
@@ -64,37 +65,90 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
   const testCount = dataLength - trainCount;
 
   return (
-    <aside className="w-72 bg-white border-r border-slate-200 overflow-y-auto hidden md:flex flex-col flex-shrink-0 z-10">
+    <aside className="w-80 bg-white border-r border-slate-200 overflow-y-auto hidden md:flex flex-col flex-shrink-0 z-10 shadow-lg">
       <div className="p-4 space-y-6">
         
+        {/* WORKBENCH STATS SECTION */}
+        {hasData && datasetStats && (
+          <div className="bg-slate-50 rounded-lg border border-slate-200 p-3 space-y-3 animate-in slide-in-from-left-2">
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+               <Microscope className="w-4 h-4 text-indigo-600" />
+               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Data Workbench</h3>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2 bg-white rounded border border-slate-100">
+                 <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                    <Sigma className="w-3 h-3" /> <span className="text-[9px] uppercase font-bold">Mean</span>
+                 </div>
+                 <div className="font-mono text-sm font-bold text-slate-800">
+                    {datasetStats.mean.toLocaleString(undefined, { maximumFractionDigits: 1, notation: "compact" })}
+                 </div>
+              </div>
+              
+              <div className="p-2 bg-white rounded border border-slate-100">
+                 <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                    <Activity className="w-3 h-3" /> <span className="text-[9px] uppercase font-bold">Volatility</span>
+                 </div>
+                 <div className={`font-mono text-sm font-bold ${datasetStats.volatility > 20 ? 'text-amber-600' : 'text-slate-800'}`}>
+                    {datasetStats.volatility.toFixed(1)}%
+                 </div>
+              </div>
+
+               <div className="p-2 bg-white rounded border border-slate-100 col-span-2">
+                 <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                    <MoveHorizontal className="w-3 h-3" /> <span className="text-[9px] uppercase font-bold">Min / Max</span>
+                 </div>
+                 <div className="font-mono text-xs font-semibold text-slate-800 flex justify-between">
+                    <span>{datasetStats.min.toLocaleString(undefined, { maximumFractionDigits: 1, notation: "compact" })}</span>
+                    <span className="text-slate-300">|</span>
+                    <span>{datasetStats.max.toLocaleString(undefined, { maximumFractionDigits: 1, notation: "compact" })}</span>
+                 </div>
+              </div>
+
+              <div className="p-2 bg-white rounded border border-slate-100 col-span-2">
+                 <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                    <Calendar className="w-3 h-3" /> <span className="text-[9px] uppercase font-bold">Date Range</span>
+                 </div>
+                 <div className="font-mono text-[10px] font-medium text-slate-600 truncate">
+                    {data[0]?.date} → {data[data.length-1]?.date}
+                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Mode Selector */}
-        <div className="bg-slate-100 p-1 rounded-lg flex">
-          <button
-            onClick={() => setMode('forecast')}
-            className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded transition-all ${
-              mode === 'forecast' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <PlayCircle className="w-3.5 h-3.5" />
-            Forecast
-          </button>
-          <button
-            onClick={() => setMode('backtest')}
-            className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded transition-all ${
-              mode === 'backtest' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <History className="w-3.5 h-3.5" />
-            Backtest
-          </button>
+        <div className="space-y-2">
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operation Mode</h3>
+            <div className="bg-slate-100 p-1 rounded-lg flex">
+              <button
+                onClick={() => setMode('forecast')}
+                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded transition-all ${
+                  mode === 'forecast' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <PlayCircle className="w-3.5 h-3.5" />
+                Forecast
+              </button>
+              <button
+                onClick={() => setMode('backtest')}
+                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-bold rounded transition-all ${
+                  mode === 'backtest' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <History className="w-3.5 h-3.5" />
+                Backtest
+              </button>
+            </div>
         </div>
 
         {/* Backtest Controls */}
         {mode === 'backtest' && hasData && (
-          <div className="bg-slate-50 p-3 rounded border border-slate-200 animate-in slide-in-from-top-2 duration-300">
+          <div className="bg-indigo-50/50 p-3 rounded border border-indigo-100 animate-in slide-in-from-top-2 duration-300">
              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Training Window</h3>
-                <span className="text-[10px] font-mono bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">
+                <h3 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Training Split</h3>
+                <span className="text-[10px] font-mono bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold">
                   {Math.round(splitRatio * 100)}%
                 </span>
              </div>
@@ -105,21 +159,18 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                 step="0.05"
                 value={splitRatio}
                 onChange={(e) => setSplitRatio(parseFloat(e.target.value))}
-                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 mb-2"
+                className="w-full h-1.5 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 mb-2"
              />
              <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-600 font-medium">
-               <div className="bg-white px-2 py-1 rounded border border-slate-100 text-center">
-                  <span className="block text-slate-400 text-[9px] uppercase">History</span>
-                  <span className="font-mono font-bold text-slate-800">{trainCount}</span>
+               <div className="bg-white px-2 py-1 rounded border border-indigo-100 text-center">
+                  <span className="block text-indigo-300 text-[9px] uppercase">Train</span>
+                  <span className="font-mono font-bold text-indigo-900">{trainCount}</span>
                </div>
-               <div className="bg-white px-2 py-1 rounded border border-slate-100 text-center">
-                  <span className="block text-slate-400 text-[9px] uppercase">Predicting</span>
-                  <span className="font-mono font-bold text-slate-800">{testCount}</span>
+               <div className="bg-white px-2 py-1 rounded border border-indigo-100 text-center">
+                  <span className="block text-indigo-300 text-[9px] uppercase">Test</span>
+                  <span className="font-mono font-bold text-indigo-900">{testCount}</span>
                </div>
              </div>
-             <p className="text-[9px] text-slate-400 mt-2 text-center leading-tight">
-               Adjust slider to roll the origin forward.
-             </p>
           </div>
         )}
 
@@ -129,7 +180,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
               <Sliders className="w-4 h-4 text-slate-500" />
-              <h2>Parameters</h2>
+              <h2>Model Settings</h2>
             </div>
           </div>
           
@@ -170,7 +221,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                 Trend (Non-Seasonal)
               </h3>
               <div className="grid grid-cols-1 gap-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100">
                   <label className="text-xs font-semibold text-slate-600 flex items-center">
                     AR (p) 
                     <Tooltip title="Autoregressive (p)" text="The number of lag observations included in the model. Uses past values to predict future ones." />
@@ -179,10 +230,10 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                     type="number" min="0" max="10"
                     value={params.p}
                     onChange={(e) => handleChange('p', parseInt(e.target.value) || 0)}
-                    className="w-12 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all"
+                    className="w-12 bg-white border border-slate-200 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
                   />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100">
                   <label className="text-xs font-semibold text-slate-600 flex items-center">
                     Diff (d)
                     <Tooltip title="Differencing (d)" text="The number of times raw observations are differenced to make data stationary (removing trends)." />
@@ -191,10 +242,10 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                     type="number" min="0" max="10"
                     value={params.d}
                     onChange={(e) => handleChange('d', parseInt(e.target.value) || 0)}
-                    className="w-12 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all"
+                    className="w-12 bg-white border border-slate-200 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
                   />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100">
                   <label className="text-xs font-semibold text-slate-600 flex items-center">
                     MA (q)
                     <Tooltip title="Moving Average (q)" text="The size of the moving average window. Uses past forecast errors to improve current predictions." />
@@ -203,7 +254,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                     type="number" min="0" max="10"
                     value={params.q}
                     onChange={(e) => handleChange('q', parseInt(e.target.value) || 0)}
-                    className="w-12 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all"
+                    className="w-12 bg-white border border-slate-200 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
                   />
                 </div>
               </div>
@@ -215,7 +266,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                 Seasonality
               </h3>
               <div className="grid grid-cols-1 gap-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100">
                   <label className="text-xs font-semibold text-slate-600 flex items-center">
                     SAR (P)
                     <Tooltip title="Seasonal AR (P)" text="Autoregressive lags for the seasonal component. Relates current value to the same period in previous cycles." />
@@ -224,10 +275,10 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                     type="number" min="0" max="10"
                     value={params.P}
                     onChange={(e) => handleChange('P', parseInt(e.target.value) || 0)}
-                    className="w-12 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-slate-900 focus:border-slate-900 outline-none"
+                    className="w-12 bg-white border border-slate-200 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none shadow-sm"
                   />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100">
                   <label className="text-xs font-semibold text-slate-600 flex items-center">
                      SDiff (D)
                      <Tooltip title="Seasonal Diff (D)" text="Number of seasonal differences. Eg: subtracting this January's sales from last January's sales." />
@@ -236,10 +287,10 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                     type="number" min="0" max="10"
                     value={params.D}
                     onChange={(e) => handleChange('D', parseInt(e.target.value) || 0)}
-                    className="w-12 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-slate-900 focus:border-slate-900 outline-none"
+                    className="w-12 bg-white border border-slate-200 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none shadow-sm"
                   />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100">
                   <label className="text-xs font-semibold text-slate-600 flex items-center">
                     SMA (Q)
                     <Tooltip title="Seasonal MA (Q)" text="Seasonal Moving Average order. Models seasonal error structures." />
@@ -248,7 +299,7 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                     type="number" min="0" max="10"
                     value={params.Q}
                     onChange={(e) => handleChange('Q', parseInt(e.target.value) || 0)}
-                    className="w-12 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-slate-900 focus:border-slate-900 outline-none"
+                    className="w-12 bg-white border border-slate-200 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none shadow-sm"
                   />
                 </div>
                 <div className="flex items-center justify-between pt-2">
@@ -260,32 +311,11 @@ export const ParameterSidebar: React.FC<ParameterSidebarProps> = ({
                     type="number" min="0" max="365"
                     value={params.s}
                     onChange={(e) => handleChange('s', parseInt(e.target.value) || 0)}
-                    className="w-12 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-slate-900 focus:border-slate-900 outline-none"
+                    className="w-12 bg-white border border-slate-200 rounded px-2 py-1 text-xs font-mono text-center focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none shadow-sm"
                   />
                 </div>
               </div>
             </section>
-          </div>
-        </div>
-
-        <div className="mt-auto pt-6">
-          <h4 className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">
-            Quick Presets
-          </h4>
-          <div className="space-y-1">
-            {[
-              { name: 'Random Walk', p: 0, d: 1, q: 0 },
-              { name: 'Exponential Smoothing', p: 0, d: 1, q: 1 },
-              { name: 'Autoregressive', p: 2, d: 0, q: 0 },
-            ].map((preset) => (
-              <button
-                key={preset.name}
-                onClick={() => setParams(prev => ({ ...prev, ...preset }))}
-                className="w-full text-left text-xs text-slate-600 hover:text-indigo-600 hover:bg-slate-50 px-2 py-1.5 rounded transition-colors flex items-center justify-between group"
-              >
-                {preset.name}
-              </button>
-            ))}
           </div>
         </div>
       </div>
